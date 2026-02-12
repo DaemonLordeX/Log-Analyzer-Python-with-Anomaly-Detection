@@ -1,0 +1,84 @@
+# log_analyzer.py
+
+from collections import defaultdict
+from datetime import datetime
+
+LOG_FILE = "sample.log"
+
+def parse_log_line(line):
+    """
+    Expected format:
+    [YYYY-MM-DD HH:MM:SS] LEVEL Message
+    """
+    try:
+        timestamp_str = line.split("]")[0][1:]
+        level = line.split("]")[1].strip().split(" ")[0]
+        timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+        return timestamp, level
+    except Exception:
+        return None, None
+
+
+def analyze_logs(file_path):
+    level_counts = defaultdict(int)
+    hourly_activity = defaultdict(int)
+    total_lines = 0
+
+    with open(file_path, "r") as file:
+        for line in file:
+            total_lines += 1
+            timestamp, level = parse_log_line(line)
+
+            if not timestamp:
+                continue
+
+            level_counts[level] += 1
+            hour_key = timestamp.strftime("%Y-%m-%d %H:00")
+            hourly_activity[hour_key] += 1
+
+    return total_lines, level_counts, hourly_activity
+
+
+def detect_anomalies(hourly_activity):
+    if not hourly_activity:
+        return []
+
+    avg = sum(hourly_activity.values()) / len(hourly_activity)
+    threshold = avg * 2
+
+    anomalies = {
+        hour: count
+        for hour, count in hourly_activity.items()
+        if count > threshold
+    }
+
+    return anomalies
+
+
+def generate_report(total, levels, hourly, anomalies):
+    print("\n--- LOG ANALYSIS REPORT ---\n")
+    print(f"Total log entries: {total}\n")
+
+    print("Log Level Distribution:")
+    for level, count in levels.items():
+        print(f"  {level}: {count}")
+
+    print("\nPeak Activity Hours:")
+    top_hours = sorted(hourly.items(), key=lambda x: x[1], reverse=True)[:3]
+    for hour, count in top_hours:
+        print(f"  {hour} -> {count} entries")
+
+    print("\nDetected Anomalies:")
+    if anomalies:
+        for hour, count in anomalies.items():
+            print(f"  ⚠ {hour} -> {count} entries (spike detected)")
+    else:
+        print("  No anomalies detected")
+
+    print("\n--- END REPORT ---\n")
+
+
+if __name__ == "__main__":
+    total, levels, hourly = analyze_logs(LOG_FILE)
+    anomalies = detect_anomalies(hourly)
+    generate_report(total, levels, hourly, anomalies)
